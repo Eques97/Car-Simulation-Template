@@ -611,7 +611,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 343619421}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 6.22, y: 1.09, z: 9.11}
+  m_LocalPosition: {x: 40.4, y: 3, z: 4.03}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children:
   - {fileID: 1940469399}
@@ -2079,8 +2079,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 300, y: 80}
-  m_SizeDelta: {x: 300, y: 200}
+  m_AnchoredPosition: {x: 230, y: 80}
+  m_SizeDelta: {x: 430, y: 200}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2078114191
 MonoBehaviour:
@@ -2114,7 +2114,17 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: New Text
+  m_Text: 'Use arrow keys to accelerate, brake and steer
+
+    Use leftshift to press
+    clutch
+
+    Use number keys, "R" and "N" to shift gears
+
+    Press "i" to ignite
+    the engine
+
+    Use "R", "N" and "D" key for automatic transmission configuration'
 --- !u!222 &2078114192
 CanvasRenderer:
   m_ObjectHideFlags: 0

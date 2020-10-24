@@ -42,6 +42,8 @@ public class CarConfig : MonoBehaviour
 
     private readonly string[] Wheels = { "LeftFrontWheel", "LeftRearWheel", "RightFrontWheel", "RightRearWheel" };
     private float RPMOutRangeTime = 0;
+    private float LastVelocity = 0;
+    private float Acceleration;
 
     // Start is called before the first frame update
     void Start()
@@ -55,7 +57,6 @@ public class CarConfig : MonoBehaviour
         ConfigWheelCollider();
         ConfigWheel();
         ConfigSuspension();
-        //if (WheelPhysics) Debug.Log("Speed " + GetComponent<Rigidbody>().velocity.magnitude * 3.6f + " WheelRPM " + transform.Find("LeftFrontWheel").GetComponent<WheelCollider>().rpm);
     }
 
     private void FixedUpdate()
@@ -64,6 +65,7 @@ public class CarConfig : MonoBehaviour
         ShiftGears();
         Steer();
         Drive();
+        ComputeAccelerationG();
     }
 
     private void ConfigWheelCollider()
@@ -73,7 +75,13 @@ public class CarConfig : MonoBehaviour
             Transform wheel = transform.Find(Wheels[i]);
             WheelCollider wc = wheel.GetComponent<WheelCollider>();
             if (WheelPhysics && wc == null) wheel.gameObject.AddComponent<WheelCollider>();
-            else if (WheelPhysics && wc != null) wc.wheelDampingRate = BaseWheelDampingRate;
+            else if (WheelPhysics && wc != null)
+            {
+                wc.wheelDampingRate = BaseWheelDampingRate;
+                WheelFrictionCurve wfc = wc.forwardFriction;
+                wfc.stiffness = 1;
+                wc.forwardFriction = wfc;
+            }                
             else if (!WheelPhysics && wc != null) Destroy(wheel.GetComponent<WheelCollider>());
         }
     }
@@ -115,12 +123,11 @@ public class CarConfig : MonoBehaviour
             if (wc == null) wheelMesh.localPosition = new Vector3(0, -SuspensionDistance, 0);
             else
             {
-                wc.suspensionDistance = SuspensionDistance;                
-                wc.suspensionSpring = new JointSpring
-                {
-                    spring = Spring,
-                    damper = Damper
-                };
+                wc.suspensionDistance = SuspensionDistance;
+                JointSpring js = wc.suspensionSpring;
+                js.spring = Spring;
+                js.damper = Damper;
+                wc.suspensionSpring = js;
             }            
         }
     }
@@ -140,7 +147,11 @@ public class CarConfig : MonoBehaviour
         if (Input.GetKey(KeyCode.I)) Dead = false;
         float vInput = Input.GetAxis("Vertical");
         if (vInput > 0.15) Lever = vInput;
-        else if (vInput < 0) Brake = true;
+        else if (vInput < 0)
+        {
+            Lever = 0.15f;
+            Brake = true;
+        }            
         else
         {
             Lever = 0.15f;
@@ -312,6 +323,13 @@ public class CarConfig : MonoBehaviour
         }
     }
 
+    public void ComputeAccelerationG()
+    {
+        float currentVelocity = GetComponent<Rigidbody>().velocity.magnitude;
+        Acceleration = (currentVelocity - LastVelocity) / Time.fixedDeltaTime / Physics.gravity.magnitude;
+        LastVelocity = currentVelocity;
+    }
+
     public string GetCurrentGear()
     {
         if (Gear == 0) return "N";
@@ -327,5 +345,10 @@ public class CarConfig : MonoBehaviour
     public int GetSpeed()
     {
         return (int)(GetComponent<Rigidbody>().velocity.magnitude * 3.6f);
+    }
+
+    public float GetAcceleration()
+    {
+        return Acceleration;
     }
 }

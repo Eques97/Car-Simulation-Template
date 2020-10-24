@@ -6,9 +6,6 @@ using UnityEngine.UI;
 public class ShowOnCanvas : MonoBehaviour
 {
     public Transform Car;
-    private readonly string Manual = "Use arrow keys to accelerate, brake and steer\nUse leftshift to press clutch" +
-        "\nUse number keys, \"R\" and \"N\" to shift gears\nPress \"i\" to ignite the engine" +
-        "\n\nUse \"R\", \"N\" and \"D\" key for automatic transmission configuration";
 
     // Start is called before the first frame update
     void Start()
@@ -20,8 +17,12 @@ public class ShowOnCanvas : MonoBehaviour
     void Update()
     {
         CarConfig cc = Car.GetComponent<CarConfig>();
-        string status = "Speed : " + cc.GetSpeed() + " km/h\nRPM : " + cc.GetEngineRPM() + "\nGear : " + cc.GetCurrentGear();
+        string gSign = (cc.GetAcceleration() > 0) ? "+ " : "- ";
+        string status = "Speed : " + 
+            cc.GetSpeed() + " km/h\nG : " + 
+            gSign + Mathf.Abs(cc.GetAcceleration()).ToString("0.00") + "\nRPM " +
+            cc.GetEngineRPM() + "\nGear : " + 
+            cc.GetCurrentGear();
         transform.Find("Status").GetComponent<Text>().text = status;
-        transform.Find("Manual").GetComponent<Text>().text = Manual;
     }
 }
