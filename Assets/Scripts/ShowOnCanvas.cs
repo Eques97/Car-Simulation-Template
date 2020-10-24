@@ -7,7 +7,8 @@ public class ShowOnCanvas : MonoBehaviour
 {
     public Transform Car;
     private readonly string Manual = "Use arrow keys to accelerate, brake and steer\nUse leftshift to press clutch" +
-        "\nUse number keys, \"r\" and \"n\" to shift gears\nPress \"i\" to ignite the engine";
+        "\nUse number keys, \"R\" and \"N\" to shift gears\nPress \"i\" to ignite the engine" +
+        "\n\nUse \"R\", \"N\" and \"D\" key for automatic transmission configuration";
 
     // Start is called before the first frame update
     void Start()

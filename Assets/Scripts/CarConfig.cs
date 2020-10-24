@@ -28,7 +28,9 @@ public class CarConfig : MonoBehaviour
     public AnimationCurve GearRatios;
     private int Gear;
     public float FinalDriveRatio;
-    //public bool Auto;
+    public bool Auto;
+    public int GearRaiseRPM;
+    public int GearReduceRPM;
     [Header("Drive")]
     public bool Front;
     private float Lever;
@@ -39,6 +41,7 @@ public class CarConfig : MonoBehaviour
     public int MaxSteerAngle;
 
     private readonly string[] Wheels = { "LeftFrontWheel", "LeftRearWheel", "RightFrontWheel", "RightRearWheel" };
+    private float RPMOutRangeTime = 0;
 
     // Start is called before the first frame update
     void Start()
@@ -134,7 +137,6 @@ public class CarConfig : MonoBehaviour
             float deltaClutch = Clutch + Time.fixedDeltaTime * 1;
             Clutch = deltaClutch < 1 ? deltaClutch : 1;
         }
-
         if (Input.GetKey(KeyCode.I)) Dead = false;
         float vInput = Input.GetAxis("Vertical");
         if (vInput > 0.15) Lever = vInput;
@@ -143,21 +145,62 @@ public class CarConfig : MonoBehaviour
         {
             Lever = 0.15f;
             Brake = false;
-        }            
+        }
+        if (Brake && Auto)
+        {
+            Clutch = 0;
+        }
     }
 
     private void ShiftGears()
     {
-        if (Input.GetKey(KeyCode.LeftShift) && Clutch == 0)
+        if (Auto)
+        {
+            if (Input.GetKey(KeyCode.R) || Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.R)) Clutch = 0;
+            if (Input.GetKey(KeyCode.N)) Gear = 0;
+            else if (Input.GetKey(KeyCode.R)) Gear = -1;
+            else if (Input.GetKey(KeyCode.D)) Gear = 1;
+            if (Gear < 1) return;
+            float threshold = 1;
+            int minGear = 1;
+            int maxGear = 1;
+            foreach (Keyframe kf in GearRatios.keys) maxGear = (int)kf.time - 1;
+            if (RPM > GearRaiseRPM)
+            {
+                if (RPMOutRangeTime < threshold) RPMOutRangeTime += Time.fixedDeltaTime;
+                else
+                {
+                    RPMOutRangeTime = 0;
+                    if (Gear < maxGear) Gear += 1;
+                    else Gear = maxGear;
+                }
+            }
+            else if (RPM < GearReduceRPM)
+            {
+                if (RPMOutRangeTime > -threshold) RPMOutRangeTime -= Time.fixedDeltaTime;
+                else
+                {
+                    RPMOutRangeTime = 0;
+                    if (Gear > minGear) Gear -= 1;
+                    else Gear = minGear;
+                }
+            }
+            else
+            {
+                if (RPMOutRangeTime < 0) RPMOutRangeTime += Time.fixedDeltaTime;
+                else if (RPMOutRangeTime > 0) RPMOutRangeTime -= Time.fixedDeltaTime;
+            }            
+        }
+        else if (Input.GetKey(KeyCode.LeftShift) && Clutch == 0)
         {
             if (Input.GetKey(KeyCode.N)) Gear = 0;
+            else if (Input.GetKey(KeyCode.R)) Gear = -1;
             else if (Input.GetKey(KeyCode.Alpha1)) Gear = 1;
             else if (Input.GetKey(KeyCode.Alpha2)) Gear = 2;
             else if (Input.GetKey(KeyCode.Alpha3)) Gear = 3;
             else if (Input.GetKey(KeyCode.Alpha4)) Gear = 4;
             else if (Input.GetKey(KeyCode.Alpha5)) Gear = 5;
             else if (Input.GetKey(KeyCode.Alpha6)) Gear = 6;
-            else if (Input.GetKey(KeyCode.R)) Gear = -1;
         }
     }
 

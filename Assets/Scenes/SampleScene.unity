@@ -598,6 +598,9 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   FinalDriveRatio: 2.79
+  Auto: 1
+  GearRaiseRPM: 4100
+  GearReduceRPM: 3100
   Front: 0
   MaxSteerAngle: 30
 --- !u!4 &343619425
