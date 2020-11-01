@@ -8,22 +8,31 @@ using UnityEngine;
 
 public class CarConfig : MonoBehaviour
 {
+    [Header("Body")]
+    public float Mass;
+    public Vector3 CenterOfMass;
+    public Vector3 ColliderCenter;
+    public Vector3 ColliderSize;
+    public Vector3 BodyMeshCenter;
+    public Transform BodyMesh;
     [Header("Wheel")]
     public float Track;
     public float WheelBase;
-    public bool WheelPhysics;
-    public float WheelWidth;
+    public float WheelMass;
     public float WheelRadius;
-    public float BaseWheelDampingRate;
+    public float WheelDampingRate;
+    public float ForwardFrictionStiffness;
+    public float SideWaysFrictionStiffness;
+    public Transform WheelMesh;
     [Header("Suspension")]
     public float SuspensionDistance;
     public float Spring;
     public float Damper;
+    public float TargetPosition;
     [Header("Engine")]
-    public AnimationCurve Performance;
-    private int RPM;
-    public int MaxRPM;
-    private bool Dead;
+    public AnimationCurve Power;
+    private float RPM;
+    private float RPMmax;
     [Header("Transmission")]
     public AnimationCurve GearRatios;
     private int Gear;
@@ -33,12 +42,13 @@ public class CarConfig : MonoBehaviour
     public int GearReduceRPM;
     [Header("Drive")]
     public bool Front;
-    private float Lever;
-    private float Clutch;
-    private bool Brake;
+    public float Lever;
+    public float Clutch;
+    public bool Brake;
     [Header("Steering")]
     [Range(20, 45)]
     public int MaxSteerAngle;
+    public float SteerAngle;
 
     private readonly string[] Wheels = { "LeftFrontWheel", "LeftRearWheel", "RightFrontWheel", "RightRearWheel" };
     private float RPMOutRangeTime = 0;
@@ -48,15 +58,65 @@ public class CarConfig : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
+        Rigidbody rigidbody = gameObject.AddComponent<Rigidbody>();
+        rigidbody.mass = Mass;
+        rigidbody.centerOfMass = new Vector3(0, 0, 0);
+        BoxCollider boxCollider = gameObject.AddComponent<BoxCollider>();
+        boxCollider.size = ColliderSize;
+        boxCollider.center = ColliderCenter;
+        Transform bodyMesh = Instantiate(BodyMesh, transform);
+        bodyMesh.name = "BodyMesh";
+        bodyMesh.localPosition = BodyMeshCenter;
 
+        for (int i = 0; i < Wheels.Length; i++)
+        {
+            GameObject wheel = new GameObject(Wheels[i]);
+            wheel.transform.parent = transform;
+            float x = i < 2 ? Track * -0.5f : Track * 0.5f;
+            float z = i % 2 == 0 ? WheelBase * 0.5f : WheelBase * -0.5f;
+            wheel.transform.localPosition = new Vector3(x, 0, z);
+            WheelCollider wheelCollider = wheel.AddComponent<WheelCollider>();
+            wheelCollider.mass = WheelMass;
+            wheelCollider.radius = WheelRadius;
+            wheelCollider.wheelDampingRate = WheelDampingRate;
+            wheelCollider.suspensionDistance = SuspensionDistance;
+            JointSpring jointSpring = wheelCollider.suspensionSpring;
+            jointSpring.spring = Spring;
+            jointSpring.damper = Damper;
+            jointSpring.targetPosition = TargetPosition;
+            wheelCollider.suspensionSpring = jointSpring;
+            WheelFrictionCurve forwardFrictionCurve = wheelCollider.forwardFriction;
+            forwardFrictionCurve.stiffness = ForwardFrictionStiffness;
+            wheelCollider.forwardFriction = forwardFrictionCurve;
+            WheelFrictionCurve sidwaysFrictionCurve = wheelCollider.sidewaysFriction;
+            sidwaysFrictionCurve.stiffness = SideWaysFrictionStiffness;
+            wheelCollider.sidewaysFriction = sidwaysFrictionCurve;
+            Transform wheelMesh = Instantiate(WheelMesh, wheel.transform);
+            wheelMesh.name = "WheelMesh";
+
+        }
+
+        RPMmax = Power.keys[Power.keys.Length - 2].time; //initialized engine max RPM from curve
     }
 
     // Update is called once per frame
     void Update()
     {
-        ConfigWheelCollider();
-        ConfigWheel();
-        ConfigSuspension();
+        MapWheelMesh();
+    }
+
+    private void MapWheelMesh()
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            Transform wheel = transform.Find(Wheels[i]);
+            Transform wheelMesh = wheel.Find("WheelMesh");
+            WheelCollider wheelCollider = wheel.GetComponent<WheelCollider>(); 
+            wheelCollider.GetWorldPose(out Vector3 pos, out Quaternion quat);
+            if (i > 1) quat *= Quaternion.Euler(0.0f, 180.0f, 0.0f);
+            wheelMesh.SetPositionAndRotation(pos, quat);
+
+        }
     }
 
     private void FixedUpdate()
@@ -64,76 +124,14 @@ public class CarConfig : MonoBehaviour
         ControlPedals();
         ShiftGears();
         Steer();
-        Drive();
+        if (Front) Drive(0, 2);
+        else Drive(1, 3);
         ComputeAccelerationG();
-    }
-
-    private void ConfigWheelCollider()
-    {
-        for (int i = 0; i < 4; i++)
-        {
-            Transform wheel = transform.Find(Wheels[i]);
-            WheelCollider wc = wheel.GetComponent<WheelCollider>();
-            if (WheelPhysics && wc == null) wheel.gameObject.AddComponent<WheelCollider>();
-            else if (WheelPhysics && wc != null)
-            {
-                wc.wheelDampingRate = BaseWheelDampingRate;
-                WheelFrictionCurve wfc = wc.forwardFriction;
-                wfc.stiffness = 1;
-                wc.forwardFriction = wfc;
-            }                
-            else if (!WheelPhysics && wc != null) Destroy(wheel.GetComponent<WheelCollider>());
-        }
-    }
-
-    private void ConfigWheel()
-    {
-        for (int i = 0; i < 4; i++)
-        {
-            Transform wheel = transform.Find(Wheels[i]);
-            Transform wheelMesh = wheel.Find("DefaultWheelMesh");
-            wheelMesh.localScale = new Vector3(WheelWidth, WheelRadius * 2, WheelRadius * 2);
-            WheelCollider wc = wheel.GetComponent<WheelCollider>();
-            if (wc == null)
-            {
-                float x = Track / 2;
-                float z = WheelBase / 2;
-                if (i % 2 != 0) z *= -1;
-                if (i < 2) x *= -1;
-                else wheelMesh.localRotation = Quaternion.Euler(0, 180, 0);
-                wheel.localPosition = new Vector3(x, 0, z);
-            }
-            else
-            {
-                wc.radius = WheelRadius;
-                wc.GetWorldPose(out Vector3 pos, out Quaternion quat);
-                if (i > 1) quat *= Quaternion.Euler(0.0f, 180.0f, 0.0f);
-                wheelMesh.SetPositionAndRotation(pos, quat);
-            }
-        }
-    }
-
-    private void ConfigSuspension()
-    {
-        for (int i = 0; i < 4; i++)
-        {
-            Transform wheel = transform.Find(Wheels[i]);
-            Transform wheelMesh = wheel.Find("DefaultWheelMesh");
-            WheelCollider wc = wheel.GetComponent<WheelCollider>();
-            if (wc == null) wheelMesh.localPosition = new Vector3(0, -SuspensionDistance, 0);
-            else
-            {
-                wc.suspensionDistance = SuspensionDistance;
-                JointSpring js = wc.suspensionSpring;
-                js.spring = Spring;
-                js.damper = Damper;
-                wc.suspensionSpring = js;
-            }            
-        }
     }
 
     private void ControlPedals()
     {
+        //Clutch
         if (Input.GetKey(KeyCode.LeftShift))
         {
             float deltaClutch = Clutch - Time.fixedDeltaTime * 5;
@@ -144,23 +142,18 @@ public class CarConfig : MonoBehaviour
             float deltaClutch = Clutch + Time.fixedDeltaTime * 1;
             Clutch = deltaClutch < 1 ? deltaClutch : 1;
         }
-        if (Input.GetKey(KeyCode.I)) Dead = false;
+        //Lever
+        float idleLever = 0.3f;
         float vInput = Input.GetAxis("Vertical");
-        if (vInput > 0.15) Lever = vInput;
-        else if (vInput < 0)
-        {
-            Lever = 0.15f;
-            Brake = true;
-        }            
-        else
-        {
-            Lever = 0.15f;
-            Brake = false;
-        }
-        if (Brake && Auto)
-        {
-            Clutch = 0;
-        }
+        float deltaLever = Lever + vInput * Time.deltaTime;
+        if (deltaLever <= 1 && deltaLever >= idleLever) Lever = deltaLever;
+
+        //Brake
+        Brake = Input.GetKey(KeyCode.Space) ? true : false;
+        if (Auto && Brake) Clutch = 0;
+
+        //Ignition
+        if (Input.GetKey(KeyCode.I) && RPM == 0) RPM = Lever * RPMmax;
     }
 
     private void ShiftGears()
@@ -174,8 +167,7 @@ public class CarConfig : MonoBehaviour
             if (Gear < 1) return;
             float threshold = 1;
             int minGear = 1;
-            int maxGear = 1;
-            foreach (Keyframe kf in GearRatios.keys) maxGear = (int)kf.time - 1;
+            int maxGear = (int)GearRatios.keys[GearRatios.keys.Length - 1].time;
             if (RPM > GearRaiseRPM)
             {
                 if (RPMOutRangeTime < threshold) RPMOutRangeTime += Time.fixedDeltaTime;
@@ -222,104 +214,59 @@ public class CarConfig : MonoBehaviour
 
         if (lw == null || rw == null) return;
 
-        float steer = Input.GetAxis("Horizontal");
+        float hAxis = Input.GetAxis("Horizontal");
+        //float deltaSteerAngle = SteerAngle + hAxis * Time.fixedDeltaTime * 1.5f;
+        //if (deltaSteerAngle < 1 && deltaSteerAngle > -1) SteerAngle = deltaSteerAngle;
+        SteerAngle = hAxis * hAxis * hAxis / Mathf.Abs(hAxis);
 
-        float l = WheelBase;
-        float t = Track;
-
-        float r;
-        float la = lw.steerAngle;
-        float ra = rw.steerAngle;
-
-        if (steer < 0)
+        if (SteerAngle < 0)
         {
-            la -= MaxSteerAngle * Time.deltaTime;
-            if (la > -MaxSteerAngle)
-            {
-                lw.steerAngle = la;
-                r = l / Mathf.Tan(la * Mathf.Deg2Rad) - t / 2;
-                rw.steerAngle = Mathf.Atan(l / (r - t / 2)) * Mathf.Rad2Deg;
-            }
+            lw.steerAngle = SteerAngle * MaxSteerAngle;
+            float r = WheelBase / Mathf.Tan(lw.steerAngle * Mathf.Deg2Rad) - Track / 2;
+            rw.steerAngle = Mathf.Atan(WheelBase / (r - Track / 2)) * Mathf.Rad2Deg;
         }
-        else if (steer > 0)
+        else if (SteerAngle > 0)
         {
-            ra += MaxSteerAngle * Time.deltaTime;
-            if (ra < MaxSteerAngle)
-            {
-                rw.steerAngle = ra;
-                r = l / Mathf.Tan(ra * Mathf.Deg2Rad) + t / 2;
-                lw.steerAngle = Mathf.Atan(l / (r + t / 2)) * Mathf.Rad2Deg;
-            }
-        }
-        else
-        {
-            la -= MaxSteerAngle * Time.deltaTime * la / Mathf.Abs(la);
-            if (la > -0.1f && la < 0.1f) lw.steerAngle = 0;
-            else lw.steerAngle = la;
-            r = l / Mathf.Tan(la * Mathf.Deg2Rad) - t / 2;
-            rw.steerAngle = Mathf.Atan(l / (r - t / 2)) * Mathf.Rad2Deg;
+            rw.steerAngle = SteerAngle * MaxSteerAngle;
+            float r = WheelBase / Mathf.Tan(rw.steerAngle * Mathf.Deg2Rad) + Track / 2;
+            lw.steerAngle = Mathf.Atan(WheelBase / (r + Track / 2)) * Mathf.Rad2Deg;
         }
     }
 
-    private void Drive()
+    private void Drive(int indexL, int indexR)
     {
-        int indexL, indexR;
-        if (Front)
-        {
-            indexL = 0;
-            indexR = 2;
-        }
-        else
-        {
-            indexL = 1;
-            indexR = 3;
-        }
+        for (int i = 0; i < 4; i++) if (transform.Find(Wheels[i]).GetComponent<WheelCollider>() == null) return;
         WheelCollider wcL = transform.Find(Wheels[indexL]).GetComponent<WheelCollider>();
         WheelCollider wcR = transform.Find(Wheels[indexR]).GetComponent<WheelCollider>();
-        float brakeTorque = Brake ? 5000 : 0;
+        float brakeTorque = Brake ? 1000 : 0;
+        float gearRatio = GearRatios.Evaluate(Gear);
+        if (gearRatio == 0) Clutch = 0;
+        float RPMi = gearRatio * FinalDriveRatio * 0.5f * (wcL.rpm + wcR.rpm);
+        float pullDelta = -Time.fixedDeltaTime * Clutch * (RPM - RPMi) * 10f;
+        float pushDelta = Time.fixedDeltaTime * (RPMmax * Lever - RPM) * 10f;
+        if (RPMi < RPM) RPM += pullDelta + pushDelta;
+        else RPM += pushDelta;
+        float power = Power.Evaluate(RPM);
+        float torque = power * 30000 / (Mathf.PI * RPM);
+        if (power == 0 && RPM < RPMmax)
+        {
+            RPM = 0;
+            torque = 0;
+        }
+        float torqueW = Clutch * gearRatio * FinalDriveRatio * 0.5f * torque;
+        wcL.motorTorque = torqueW;
+        wcR.motorTorque = torqueW;
+        wcL.wheelDampingRate = (RPMi < RPM || RPM == 0) ? WheelDampingRate : 10 * wcL.motorTorque / (RPM / gearRatio / FinalDriveRatio);
+        wcR.wheelDampingRate = (RPMi < RPM || RPM == 0) ? WheelDampingRate : 10 * wcL.motorTorque / (RPM / gearRatio / FinalDriveRatio);
         for (int i = 0; i < 4; i++)
         {
             WheelCollider wc = transform.Find(Wheels[i]).GetComponent<WheelCollider>();
-            if (wc == null) return;
-            wc.wheelDampingRate = BaseWheelDampingRate;
             wc.brakeTorque = brakeTorque;
-            wc.motorTorque = 0;
-        }
-        if (Dead)
-        {
-            wcL.wheelDampingRate = 100;
-            wcR.wheelDampingRate = 100;
-            RPM = 0;
-            return;
-        }
-        float rpmS = FinalDriveRatio * 0.5f * (wcL.rpm + wcR.rpm);
-        float gearRatio = GearRatios.Evaluate(Gear);
-        float rpmC = rpmS * gearRatio;
-        float rpmEC0 = MaxRPM * Lever;
-        if (gearRatio == 0)
-        {
-            RPM = (int)rpmEC0;
-            return;
-        }
-        float rpmE = (rpmEC0 * (1 - 0.5f * Clutch) + rpmC * 0.5f * Clutch);
-        RPM = (int)rpmE;
-        float pE = Performance.Evaluate(RPM) * 1000;
-        if (pE == 0 && RPM < MaxRPM) Dead = true;
-        float tS = pE * Clutch * 60 / (2 * Mathf.PI * rpmE / gearRatio / FinalDriveRatio);
-        float tW = tS * 0.5f;
-        wcL.motorTorque = tW;
-        wcR.motorTorque = tW;
-        if (rpmC > rpmEC0)
-        {
-            float rpmWLimit = rpmEC0 / gearRatio / FinalDriveRatio;
-            float engineDragDamp = 10 * tW / rpmWLimit;
-            wcL.wheelDampingRate = engineDragDamp + BaseWheelDampingRate;
-            wcR.wheelDampingRate = engineDragDamp + BaseWheelDampingRate;
-        }
-        if (RPM > MaxRPM)
-        {
-            wcL.wheelDampingRate = 100;
-            wcR.wheelDampingRate = 100;
+            if (i != indexL && i != indexR)
+            {
+                wc.motorTorque = 0;
+                wc.wheelDampingRate = WheelDampingRate;
+            }
         }
     }
 
@@ -339,7 +286,7 @@ public class CarConfig : MonoBehaviour
 
     public int GetEngineRPM()
     {
-        return RPM;
+        return (int)RPM;
     }
 
     public int GetSpeed()
